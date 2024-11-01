@@ -1,4 +1,6 @@
 set_languages("c++20")
+
+add_requires("libxxhash", "capstone", {system = true})
 target("NvdecTrace")
     set_basename("inject")
     set_prefixname("")
