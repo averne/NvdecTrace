@@ -1,5 +1,3 @@
-// g++ -fPIC -g -O3 -DGPFIFO_VOLTA -shared -Iinclude -std=gnu++20 src/inject.cpp -lcapstone -lxxhash -o inject
-
 #include <cstdio>
 #include <cstdint>
 #include <cstdint>
@@ -57,6 +55,13 @@
 
 #define GPFIFO_VOLTA
 
+#define SHOULD_LOG_FILES  0
+#define SHOULD_LOG_MEM    0
+#define SHOULD_LOG_POLL   0
+#define SHOULD_LOG_IOCTL  0
+#define SHOULD_LOG_GPFIFO 1
+#define SHOULD_LOG_NVDEC  1
+
 #define _LOG(fmt, ...) std::fprintf(stderr, fmt, ##__VA_ARGS__)
 
 #define LOG_CLASS(c, fmt, ...)  ({ \
@@ -64,19 +69,12 @@
         _LOG(fmt, ##__VA_ARGS__);  \
 })
 
-#define LOG_FILES(fmt, ...) LOG_CLASS(FILES, fmt, ##__VA_ARGS__)
-#define LOG_MEM(fmt, ...) LOG_CLASS(MEM,   fmt, ##__VA_ARGS__)
-#define LOG_POLL(fmt, ...) LOG_CLASS(POLL,   fmt, ##__VA_ARGS__)
-#define LOG_IOCTL(fmt, ...) LOG_CLASS(IOCTL, fmt, ##__VA_ARGS__)
+#define LOG_FILES(fmt, ...)  LOG_CLASS(FILES,  fmt, ##__VA_ARGS__)
+#define LOG_MEM(fmt, ...)    LOG_CLASS(MEM,    fmt, ##__VA_ARGS__)
+#define LOG_POLL(fmt, ...)   LOG_CLASS(POLL,   fmt, ##__VA_ARGS__)
+#define LOG_IOCTL(fmt, ...)  LOG_CLASS(IOCTL,  fmt, ##__VA_ARGS__)
 #define LOG_GPFIFO(fmt, ...) LOG_CLASS(GPFIFO, fmt, ##__VA_ARGS__)
-#define LOG_NVDEC(fmt, ...) LOG_CLASS(NVDEC, fmt, ##__VA_ARGS__)
-
-#define SHOULD_LOG_FILES  0
-#define SHOULD_LOG_MEM    0
-#define SHOULD_LOG_POLL   0
-#define SHOULD_LOG_IOCTL  0
-#define SHOULD_LOG_GPFIFO 1
-#define SHOULD_LOG_NVDEC  1
+#define LOG_NVDEC(fmt, ...)  LOG_CLASS(NVDEC,  fmt, ##__VA_ARGS__)
 
 #define HEXDUMP(c, ...) ({        \
     if constexpr (SHOULD_LOG_##c) \
@@ -132,6 +130,8 @@ struct MappingInfo {
 using Digest = XXH64_hash_t;
 #define DG_FMT "%016lx"
 #define DG_UNPACK(d) __builtin_bswap64(d)
+
+
 static csh capstonehdl = {};
 
 static std::unordered_map<int, std::string>   g_map_files = {};
@@ -139,7 +139,7 @@ static std::unordered_map<void*, MappingInfo> g_fake_maps = {};
 
 static std::list<DmaAllocInfo> g_dma_allocs    = {};
 static std::vector<GpFifoInfo> g_nvdec_gpfifos = {};
-static std::vector<GpFifoInfo> g_dma_gpfifos = {};
+static std::vector<GpFifoInfo> g_dma_gpfifos   = {};
 
 
 using namespace std::string_view_literals;
@@ -174,7 +174,7 @@ GpFifoInfo *find_gpfifo(const T &pred) {
 }
 
 extern "C" int open(const char *pathname, int flags, ...) {
-    static int (*real_open)(const char *pathname, int flags, ...) = NULL;
+    static int (*real_open)(const char *pathname, int flags, ...) = nullptr;
     if (!real_open) real_open = reinterpret_cast<decltype(real_open)>(dlsym(RTLD_NEXT, "open"));
 
     void *args = __builtin_apply_args();
@@ -191,11 +191,11 @@ extern "C" int open(const char *pathname, int flags, ...) {
     __builtin_return(res);
 }
 
-// extern "C" __attribute__((alias("open")))
-// int open64(const char *, int, ...) __THROW;
+extern "C" __attribute__((alias("open")))
+int open64(const char *, int, ...) __THROW;
 
 extern "C" int close(int fildes) {
-    static int (*real_close)(int fildes) = NULL;
+    static int (*real_close)(int fildes) = nullptr;
     if (!real_close) real_close = reinterpret_cast<decltype(real_close)>(dlsym(RTLD_NEXT, "close"));
 
     int rc = real_close(fildes);
@@ -212,7 +212,7 @@ extern "C" int close(int fildes) {
 }
 
 extern "C" void *mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off) {
-    static void *(*real_mmap)(void *addr, size_t len, int prot, int flags, int fildes, off_t off) = NULL;
+    static void *(*real_mmap)(void *addr, size_t len, int prot, int flags, int fildes, off_t off) = nullptr;
     if (!real_mmap) real_mmap = reinterpret_cast<decltype(real_mmap)>(dlsym(RTLD_NEXT, "mmap"));
 
     void *res = real_mmap(addr, len, prot, flags, fildes, off);
@@ -238,8 +238,11 @@ extern "C" void *mmap(void *addr, size_t len, int prot, int flags, int fildes, o
     return res;
 }
 
+extern "C" __attribute__((alias("mmap")))
+void *mmap64(void *, size_t, int, int, int, off64_t) __THROW;
+
 extern "C" int munmap(void *addr, size_t len) {
-    static int (*real_munmap)(void *addr, size_t len) = NULL;
+    static int (*real_munmap)(void *addr, size_t len) = nullptr;
     if (!real_munmap) real_munmap = reinterpret_cast<decltype(real_munmap)>(dlsym(RTLD_NEXT, "munmap"));
 
     int res = real_munmap(addr, len);
@@ -250,7 +253,7 @@ extern "C" int munmap(void *addr, size_t len) {
 }
 
 extern "C" int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
-    static int (*real_poll)(struct pollfd fds[], nfds_t nfds, int timeout) = NULL;
+    static int (*real_poll)(struct pollfd fds[], nfds_t nfds, int timeout) = nullptr;
     if (!real_poll) real_poll = reinterpret_cast<decltype(real_poll)>(dlsym(RTLD_NEXT, "poll"));
 
     int res = real_poll(fds, nfds, timeout);
@@ -268,7 +271,7 @@ extern "C" int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 }
 
 extern "C" int ioctl(int fildes, int request, void *arg) {
-    static void *(*real_ioctl)(int fildes, int request, void *arg) = NULL;
+    static void *(*real_ioctl)(int fildes, int request, void *arg) = nullptr;
     if (!real_ioctl) real_ioctl = reinterpret_cast<decltype(real_ioctl)>(dlsym(RTLD_NEXT, "ioctl"));
 
     void *args = __builtin_apply_args();
@@ -578,9 +581,6 @@ extern "C" int ioctl(int fildes, int request, void *arg) {
     __builtin_return(res);
 }
 
-extern "C" __attribute__((alias("mmap")))
-void *mmap64(void *, size_t, int, int, int, off_t) __THROW;
-
 void handle_nvdec_kickoff(GpFifoInfo *gpfifo, greg_t entries_off) {
     LOG_GPFIFO("Nvdec kickoff detected with offset %#llx\n", entries_off);
 
@@ -787,7 +787,7 @@ void entry() {
     sa.sa_flags = SA_SIGINFO;
     sigemptyset(&sa.sa_mask);
     sa.sa_sigaction = segfault_handler;
-    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGSEGV, &sa, nullptr);
     LOG_MEM("Registered segfault handler\n");
 }
 
