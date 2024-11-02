@@ -355,8 +355,15 @@ extern "C" int ioctl(int fildes, int request, void *arg) {
                 break;
 
             switch (hclass) {
+                case GF100_CHANNEL_GPFIFO:
+                case KEPLER_CHANNEL_GPFIFO_B:
                 case MAXWELL_CHANNEL_GPFIFO_A:
-                case AMPERE_CHANNEL_GPFIFO_A: {
+                case PASCAL_CHANNEL_GPFIFO_A:
+                case VOLTA_CHANNEL_GPFIFO_A:
+                case TURING_CHANNEL_GPFIFO_A:
+                case AMPERE_CHANNEL_GPFIFO_A:
+                case HOPPER_CHANNEL_GPFIFO_A:
+                case BLACKWELL_CHANNEL_GPFIFO_A:{
                     auto *params = static_cast<NV_CHANNEL_ALLOC_PARAMS *>(alloc_params);
 
                     if (params->engineType == NV2080_ENGINE_TYPE_NVDEC0) {
