@@ -893,18 +893,37 @@ void hexdumpdw(void *mem, unsigned int len, int indent) {
     }
 }
 
+template <int Codec>
+struct CodecSetup {
+    using type = typename
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG1, nvdec_mpeg2_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG2, nvdec_mpeg2_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG4, nvdec_mpeg4_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VC1,   nvdec_vc1_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_H264,  nvdec_h264_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_HEVC,  nvdec_hevc_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP8,   nvdec_vp8_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP9,   nvdec_vp9_pic_s,
+        std::conditional_t<Codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_AV1,   nvdec_av1_pic_s,
+        void>>>>>>>>>;
+};
+
+template <int Codec> using CodecSetupT = typename CodecSetup<Codec>::type;
+
 std::size_t get_nvdec_codec_setup_size(int codec_id) {
     switch (codec_id) {
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG1: return sizeof(nvdec_mpeg2_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG2: return sizeof(nvdec_mpeg2_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG4: return sizeof(nvdec_mpeg4_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VC1:   return sizeof(nvdec_vc1_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_H264:  return sizeof(nvdec_h264_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_HEVC:  return sizeof(nvdec_hevc_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP8:   return sizeof(nvdec_vp8_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP9:   return sizeof(nvdec_vp9_pic_s);
-        case NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_AV1:   return sizeof(nvdec_av1_pic_s);
-        default:                                         return 0;
+        #define CASE(c) case c: return sizeof(CodecSetupT<c>)
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG1);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG2);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_MPEG4);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VC1);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_H264);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_HEVC);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP8);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP9);
+        CASE(NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_AV1);
+        #undef CASE
+        default: return 0;
     }
 }
 
