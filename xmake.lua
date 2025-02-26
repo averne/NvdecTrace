@@ -1,6 +1,8 @@
 set_languages("c++20")
+add_rules("mode.debug", "mode.release")
+add_requires("xxhash", "capstone")
 
-add_requires("libxxhash", "capstone", {system = true})
+
 target("NvdecTrace")
     set_basename("inject")
     set_prefixname("")
@@ -17,6 +19,6 @@ target("NvdecTrace")
         "open-gpu-kernel-modules/src/nvidia/arch/nvalloc/unix/include",
         "open-gpu-kernel-modules/kernel-open/nvidia-uvm")
 
-    add_packages("libxxhash", "capstone")
+    add_packages("xxhash", "capstone")
 
     set_kind("shared")
