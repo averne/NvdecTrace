@@ -1,6 +1,7 @@
 set_languages("c++20")
 add_rules("mode.debug", "mode.release")
 add_requires("xxhash", "capstone")
+add_requires("pkgconfig::cuda", { system = true })
 
 
 target("NvdecTrace")
@@ -22,3 +23,9 @@ target("NvdecTrace")
     add_packages("xxhash", "capstone")
 
     set_kind("shared")
+
+
+target("cuda-test")
+    add_files("test/*.c")
+
+    add_packages("pkgconfig::cuda")
