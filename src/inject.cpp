@@ -363,10 +363,11 @@ extern "C" int ioctl(int fildes, int request, void *arg) {
                 case TURING_CHANNEL_GPFIFO_A:
                 case AMPERE_CHANNEL_GPFIFO_A:
                 case HOPPER_CHANNEL_GPFIFO_A:
-                case BLACKWELL_CHANNEL_GPFIFO_A:{
+                case BLACKWELL_CHANNEL_GPFIFO_A:
+                case BLACKWELL_CHANNEL_GPFIFO_B:{
                     auto *params = static_cast<NV_CHANNEL_ALLOC_PARAMS *>(alloc_params);
 
-                    if (params->engineType == NV2080_ENGINE_TYPE_NVDEC0) {
+                    if (NV2080_ENGINE_TYPE_IS_NVDEC(params->engineType)) {
                         auto pred = [&](DmaAllocInfo &a) { return params->gpFifoOffset == a.gpu_addr + params->gpFifoEntries * 64; };
 
                         if (auto alloc = std::ranges::find_if(g_dma_allocs, pred); alloc != g_dma_allocs.end()) {
@@ -381,7 +382,7 @@ extern "C" int ioctl(int fildes, int request, void *arg) {
                         }
                     }
 
-                    if (params->engineType == NV2080_ENGINE_TYPE_COPY2) {
+                    if (NV2080_ENGINE_TYPE_IS_COPY(params->engineType)) {
                         auto pred = [&](DmaAllocInfo &a) { return params->gpFifoOffset == a.gpu_addr + params->gpFifoEntries * 64; };
 
                         if (auto alloc = std::ranges::find_if(g_dma_allocs, pred); alloc != g_dma_allocs.end()) {
@@ -607,7 +608,7 @@ void handle_nvdec_kickoff(GpFifoInfo *gpfifo, greg_t entries_off) {
                 subchan = DRF_VAL(A16F, _DMA, _METHOD_SUBCHANNEL, c), method = DRF_VAL(A16F, _DMA, _METHOD_ADDRESS, c) << 2;
             LOG_GPFIFO("  Method %#06x (%#010x): type %d, size %x, subchannel %d, reg %#010x (%s)\n", i, c, op, size, subchan, method, get_nvdec_reg_name(method));
 
-            if ((op != NVA16F_DMA_SEC_OP_INC_METHOD) && (op != NVA16F_DMA_SEC_OP_ONE_INC))
+            if ((op != NVA16F_DMA_SEC_OP_INC_METHOD) && (op != NVA16F_DMA_SEC_OP_ONE_INC) && (op != NVA16F_DMA_SEC_OP_NON_INC_METHOD))
                 continue;
 
             auto stop = i + size;
@@ -633,6 +634,7 @@ void handle_nvdec_kickoff(GpFifoInfo *gpfifo, greg_t entries_off) {
                 DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _RET_ERROR,                 v), DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _ERR_CONCEAL_ON,  v),
                 DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _ERROR_FRM_IDX,             v), DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _MBTIMER_ON,      v),
                 DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _EC_INTRA_FRAME_USING_PSLC, v), DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _ALL_INTRA_FRAME, v));
+        auto codec = DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _CODEC_TYPE, v);
 
         auto sz = get_nvdec_codec_setup_size(DRF_VAL(C7B0, _SET_CONTROL_PARAMS, _CODEC_TYPE, v));
         addr = find_cmdbuf_alloc(cmds, len, NVC7B0_SET_DRV_PIC_SETUP_OFFSET);
@@ -654,6 +656,27 @@ void handle_nvdec_kickoff(GpFifoInfo *gpfifo, greg_t entries_off) {
             digest = hash_buffer(addr, 0x100);
             LOG_NVDEC("Slice offsets: " DG_FMT "\n", DG_UNPACK(digest));
             HEXDUMPDW(NVDEC, addr, 0x40, 1);
+        }
+
+        addr = find_cmdbuf_alloc(cmds, len, NVC7B0_HEVC_SET_SCALING_LIST_OFFSET);
+        if (codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_HEVC && addr) {
+            digest = hash_buffer(addr, 0x400);
+            LOG_NVDEC("Scaling lists: " DG_FMT "\n", DG_UNPACK(digest));
+            HEXDUMPDW(NVDEC, addr, 0x400, 1);
+        }
+
+        addr = find_cmdbuf_alloc(cmds, len, NVC7B0_HEVC_SET_TILE_SIZES_OFFSET);
+        if (codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_HEVC && addr) {
+            digest = hash_buffer(addr, 0x400);
+            LOG_NVDEC("Tile sizes: " DG_FMT "\n", DG_UNPACK(digest));
+            HEXDUMPDW(NVDEC, addr, 0x400, 1);
+        }
+
+        addr = find_cmdbuf_alloc(cmds, len, NVC7B0_VP9_SET_TILE_SIZE_BUF_OFFSET);
+        if (codec == NVC7B0_SET_CONTROL_PARAMS_CODEC_TYPE_VP9 && addr) {
+            digest = hash_buffer(addr, 0x700);
+            LOG_NVDEC("Tile sizes: " DG_FMT "\n", DG_UNPACK(digest));
+            HEXDUMPDW(NVDEC, addr, 0x400, 1);
         }
 
         LOG_NVDEC("Maps:\n");
@@ -811,7 +834,7 @@ std::uint32_t find_cmdbuf_value(std::uint32_t *cmds, int len, std::uint32_t reg)
         auto op = DRF_VAL(A16F, _DMA, _SEC_OP, c), size = DRF_VAL(A16F, _DMA, _METHOD_COUNT, c),
             method = DRF_VAL(A16F, _DMA, _METHOD_ADDRESS, c) << 2;
 
-        if ((op != NVA16F_DMA_SEC_OP_INC_METHOD) && (op != NVA16F_DMA_SEC_OP_ONE_INC))
+        if ((op != NVA16F_DMA_SEC_OP_INC_METHOD) && (op != NVA16F_DMA_SEC_OP_ONE_INC) && (op != NVA16F_DMA_SEC_OP_NON_INC_METHOD))
             continue;
 
         if (method == reg)

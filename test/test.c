@@ -28,6 +28,11 @@ int main(int argc, char **argv) {
     CUdevice dev;
     CUDA_CHECK(cuDeviceGet(&dev, 0));
 
+    int major, minor;
+    cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev);
+    cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev);
+    printf("Compute version: %d.%d\n", major, minor);
+
     printf("Context init\n");
     CUcontext ctx;
     CUDA_CHECK(cuCtxCreate(&ctx, CU_CTX_SCHED_BLOCKING_SYNC | CU_CTX_MAP_HOST, dev));
